@@ -7,6 +7,13 @@ from loop_rate_limiters import RateLimiter
 os.chdir("/Users/seojin/myosuite/myosuite/simhive/myo_sim/arm")
 _XML_ARM_Model = "myoarm.xml"
 
+"""
+myoarm.xml 파일을 불러오되, 그 위에 target이라는 이름의 mocap body를 추가하여 시뮬레이터에 로드합니다.
+
+여기서 Mocap body는 마우스로 조작 가능한 가상의 목표물.
+mocap="true"로 설정된 body는 시뮬레이터에서 마우스로 조작할 수 있는 대상이 됨.
+"""
+
 xml_string = f"""
         <mujoco model="MyoArm with Mocap">
             <include file="{_XML_ARM_Model}"/>
@@ -27,6 +34,11 @@ data = mujoco.MjData(model)
 
 configuration = mink.Configuration(model)
 
+"""
+IK는 여러 목표를 동시에 만족시켜야 함
+- FrameTask: 로봇의 S_grasp (손바닥 부위) 지점이 목표 지점의 위치와 방향을 따르도록 한다.
+- PostureTask: 로봇이 특정 자세를 유지하려는 성질을 부여함. 관절이 꺾이거나 이상한 자세가 되는 것을 방지하는 일종의 정규화 역할을 함.
+"""
 tasks = [
     end_effector_task := mink.FrameTask(
         frame_name="S_grasp",
@@ -44,7 +56,7 @@ tasks = [
 solver = "quadprog"
 pos_threshold = 1e-4
 ori_threshold = 1e-4
-max_iters = 20
+max_iters = 20 # 한 프레임 내에서 최대 20번까지 반복 계산하여 오차가 임계값보다 작아질 때까지 정확도를 높임
 
 with mujoco.viewer.launch_passive(model=model, 
                                   data=data, 
@@ -59,23 +71,25 @@ with mujoco.viewer.launch_passive(model=model,
     # Initialize the mocap target at the end-effector site.
     mink.move_mocap_to_frame(model, data, "target", "S_grasp", "site")
 
-    rate = RateLimiter(frequency=500.0, warn=False)
+    rate = RateLimiter(frequency=500.0, warn=False) # 시뮬레이션 속도를 일정하게(500Hz) 유지
     while viewer.is_running():
-        # Update task target.
+        # 사용자가 마우스로 옮긴 target의 현재 위치를 가져옴
         T_wt = mink.SE3.from_mocap_name(model, data, "target")
+
+        # 그 위치를 IK가 쫓아가야 할 목표(set_target)로 설정함
         end_effector_task.set_target(T_wt)
 
         # Compute velocity and integrate into the next configuration.
         for i in range(max_iters):
-            vel = mink.solve_ik(configuration, tasks, rate.dt, solver, 1e-3)
-            configuration.integrate_inplace(vel, rate.dt)
+            vel = mink.solve_ik(configuration, tasks, rate.dt, solver, 1e-3) # quadprog 솔버를 사용하여 현재 위치에서 목표 위치로 가기 위한 관절 속도를 계산함.
+            configuration.integrate_inplace(vel, rate.dt) # 계산된 속도에 시간 변화량(dt)을 곱해 다음 관절 위치(q)를 업데이트 함.
             err = end_effector_task.compute_error(configuration)
             pos_achieved = np.linalg.norm(err[:3]) <= pos_threshold
             ori_achieved = np.linalg.norm(err[3:]) <= ori_threshold
             if pos_achieved and ori_achieved:
                 break
 
-        data.qpos[:] = configuration.q
+        data.qpos[:] = configuration.q # qpos를 실제 MuJoCo 데이터에 적용하고 mj_step을 통해 물리 법칙을 계산함.
         mujoco.mj_step(model, data)
 
         # Visualize at fixed FPS.
