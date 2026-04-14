@@ -1,6 +1,8 @@
 
 # References
 - mujoco tutorial: https://colab.research.google.com/github/google-deepmind/mujoco/blob/main/python/tutorial.ipynb
+- modeling: https://mujoco.readthedocs.io/en/latest/modeling.html#mocap-bodies
+- MJCF: https://mujoco.readthedocs.io/en/latest/XMLreference.html
 
 # MuJoCo
 
@@ -26,13 +28,10 @@ MuJoCo 엔진이 시뮬레이션의 시간 흐름, 물리 법칙 계산, 화면 
 
 # Core functions
 
-- mjModel: containes the model description, i.e., all quantities which do not change over time. 
-    - ngeom: #geometrys in the scene
-    - geom_rgba: their respective colors
-    - geom(name): we can inspect properties using `model.geom("green_sphere")`
 - mjData: contains the state and quantities that depend on it. The state is made up of time, generalized positions and generalized velocities. These are respectively data.time, data.qpos and data.qvel. In order to make a new mjData, all we need is our mjModel using `mujoco.MjData(model)`
     - contains functions of the state, for example the Cartesian positions of objects in the world frame. The (x, y, z) positions of our two geoms are `in data.geom_xpos`:
         - **To update the values in here, the data should be explicitly propagated.**
+
 - mujoco.mj_kinematics(model, data): computes global Cartesian poses for all objects (excluding cameras and lights).  
 - mujoco.mj_forward(): which invokes the entire pipeline up to the computation of accelerations. i.e., it computs $\dot{x} = f(x) $, where $x$ is the state. 
 - mujoco.Renderer
@@ -41,13 +40,27 @@ MuJoCo 엔진이 시뮬레이션의 시간 흐름, 물리 법칙 계산, 화면 
 
 # Concept
 
-- bodies: the things that move (and which have inertia) are called bodies.
+- body: the things that move (and which have inertia) are called bodies.
 - free body: is a body with a free joint having 6 DoFs, i.e., 3 translations and 3 rotations.
+- MJCF: MuJoCo XML Format
 - 6 DoFs: is the number of independent movement which an object can have in space.
   - 3 translations: x, y, z
   - 3 rotations: roll, pitch, yaw
+- Spatial frame: contains location(x,y,z) and orientation, 6-DOF
+  - right-handed rule
+- geometric object: 겉모양과 충돌을 담당하는 요소
 
 # Model
+
+- MJCF formats(xml) -> document object model (DOM) -> mjSpec -> mjModel(compiled)
+- Python
+  - mjModel: containes the model description, i.e., all quantities which do not change over time. 
+      - ngeom: #geometrys in the scene
+      - geom_rgba: their respective colors
+      - geom(name): we can inspect properties using `model.geom("green_sphere")`
+  - mujoco.MjModel.from_xml_path: load model from xml file
+  - mujoco.mj_saveModel: save model into a binary MJB file
+  - mujoco.mj_saveLastXML: save mjSpec as MJCF
 
 - xml: The xml string is written in MuJoco's MJCF, which is an XML-based modeling language 
   - &lt;mujoco&gt;: This is minimal requirement to make valid MJCF model
@@ -85,3 +98,44 @@ with mujoco.Renderer(model) as renderer:
 
   media.show_image(renderer.render())
 ```
+
+# MJCF
+
+## Kinematic tree
+
+- worldbody: The top-level body
+- body: physical entity
+  - **joint**, **geom**, **site**, **camera**, **light** is fixed to the local frame of the body and always moves with it.
+- joint
+  - joint in body, create motion degrees of freedom between parent and child body.
+  - body without joint, that child body is welded to its parent
+
+## Default settings
+
+When a defaults class is defined within another defaults class, the child automatically inherits all attribute values from the parent. It can then override some or all of them by defining the corresponding attributes. The top-level defaults class does not have a pearnt, and so its attributes are initialized to internal defaults.
+
+## Coordinate frames
+
+The positions and orientations of all elements defined in the kinematic tree are expressed in local coordinates, relative to the parent body for bodies, and relative to the body that contains the element for geoms, joints, sites, cameras and lights
+
+# Actuators
+
+## Force limits
+
+## Length range
+
+## Stateful actuators
+
+### Activation limts
+
+### Muscles
+
+# MyoConverter
+
+MyoConverter is a tool for converting OpenSim musculoskeletal (MSK) models to the MuJoCo model format with optimized muscle kinematics and kinetics.
+
+# MoCap bodies
+
+mocap bodies are static children of the world (i.e., have no joints) and their mocap attribute is set to “true”. They can be used to input a data stream from a motion capture device into a MuJoCo simulation.
+
+The first step is to define a mocap body in the MJCF model, and implement code that reads the data stream at runtime and sets mjData.mocap_pos and mjData.mocap_quat to the position and orientation received from the motion capture system. The simulate.cc code sample uses the mouse as a motion capture device, allowing the user to move mocap bodies around:
