@@ -1,19 +1,14 @@
 
+# Common Libraries
 import os, mink, mujoco, mujoco.viewer
-
 import numpy as np
 from loop_rate_limiters import RateLimiter
 
+# Paths
 os.chdir("/Users/seojin/myosuite/myosuite/simhive/myo_sim/arm")
 _XML_ARM_Model = "myoarm.xml"
 
-"""
-myoarm.xml 파일을 불러오되, 그 위에 target이라는 이름의 mocap body를 추가하여 시뮬레이터에 로드합니다.
-
-여기서 Mocap body는 마우스로 조작 가능한 가상의 목표물.
-mocap="true"로 설정된 body는 시뮬레이터에서 마우스로 조작할 수 있는 대상이 됨.
-"""
-
+# Model specification
 xml_string = f"""
         <mujoco model="MyoArm with Mocap">
             <include file="{_XML_ARM_Model}"/>
@@ -25,38 +20,26 @@ xml_string = f"""
         </mujoco>
         """
 
+# Initialize model and data
 model = mujoco.MjModel.from_xml_string(xml_string)
 data = mujoco.MjData(model)
 
-## =================== ##
-## Setup IK.
-## =================== ##
-
+# Inverse Kinematics configuration
 configuration = mink.Configuration(model)
-
-"""
-IK는 여러 목표를 동시에 만족시켜야 함
-- FrameTask: 로봇의 S_grasp (손바닥 부위) 지점이 목표 지점의 위치와 방향을 따르도록 한다.
-- PostureTask: 로봇이 특정 자세를 유지하려는 성질을 부여함. 관절이 꺾이거나 이상한 자세가 되는 것을 방지하는 일종의 정규화 역할을 함.
-"""
 tasks = [
     end_effector_task := mink.FrameTask(
-        frame_name="S_grasp",
+        frame_name="S_grasp", # FrameTask: 로봇의 S_grasp (손바닥 부위) 지점이 목표 지점의 위치와 방향을 따르도록 한다.
         frame_type="site",
         position_cost=1.0,
         orientation_cost=1.0,
         lm_damping=1.0,
     ),
-    posture_task := mink.PostureTask(model=model, cost=1e-2),
+    posture_task := mink.PostureTask(model=model, cost=1e-2), # 로봇이 특정 자세를 유지하려는 성질을 부여함. 관절이 꺾이거나 이상한 자세가 되는 것을 방지하는 일종의 정규화 역할을 함.
 ]
-
-## =================== ##
-
-# IK settings.
 solver = "quadprog"
 pos_threshold = 1e-4
 ori_threshold = 1e-4
-max_iters = 20 # 한 프레임 내에서 최대 20번까지 반복 계산하여 오차가 임계값보다 작아질 때까지 정확도를 높임
+max_iters = 20
 
 with mujoco.viewer.launch_passive(model=model, 
                                   data=data, 
