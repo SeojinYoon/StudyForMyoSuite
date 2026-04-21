@@ -6,29 +6,28 @@
 
 # MuJoCo
 
-## Managed viewer
+- Managed viewer: MuJoCo handles the simulation's timeline, physics, and rendering. Users only need to define callback functions to be triggered at specific points during execution
+  - API
+    - viewer.launch(): launches an empty visualization session, where a model can be loaded by drag-and-drop
+    - viewer.launch(model): launches a visualization session for the given mjModel where the visualizer internally creates its own instance of mjData
+    - viewer.launch(model, data): is the same as above, except that the visualizer operates directly on the given mjData instance
+  - advantage: this viewer is good when we want to simulate somthing itself without external interruption ex) RL simulation
+- Standalone app
+  - API
+    - python -m mujoco.viewer: launches an empty visualization session, where a model can be loaded by drag-and-drop
+    - python -m mujoco.viewer --mjcf=[xml_path]: launches a visualization session for the specified model file
+- Passive viewer: The user manually manages the physics and time flow within a custom loop, while the engine performs computations only when explicitly called by the user
+  - API
+    - viewer.launch_passive: function launches the interactive viewer in a way which does not block, allowing user code to continue execution. In this mode, the user's script is responsible for timing and advancing the physics state, and mouse-drag perturbations will not work unless the user explicitly synchronizes incoming events.
+    - lock(): provides a mutext lock for the viewer as a context manager. Since the viewer operates its own thread, user code must ensure that it is holding the viewer lock before modifying any physics or visualization state. 
+    - sync(): synchronizes between the user's mjModel, mjData and the GUI. 
+    - key_callback: A callable which gets called each time a keyboard event occurs in the viewer window.
+  - advantage: This mode is ideal for tasks requiring precise data synchronization, such as inverse kinematics (IK) or mapping pre-recorded motion data, as it allows the user to update the model's state and sync it with the visualizer at any desired pace
 
-MuJoCo 엔진이 시뮬레이션의 시간 흐름, 물리 법칙 계산, 화면 렌더링을 직접 관리함. 사용자는 엔진이 돌아가는 도중에 특정 시점마다 실행된 콜백 함수만 전달함.
-
-- viewer.launch(): launches an empty visualization session, where a model can be loaded by drag-and-drop
-- viewer.launch(model): launches a visualization session for the given mjModel where the visualizer internally creates its own instance of mjData
-- viewer.launch(model, data): is the same as above, except that the visualizer operates directly on the given mjData instance
-
-## Standalone app
-
-- python -m mujoco.viewer: launches an empty visualization session, where a model can be loaded by drag-and-drop
-- python -m mujoco.viewer --mjcf=[xml_path]: launches a visualization session for the specified model file
-
-## Passive viewer
-
-- viewer.launch_passive: function launches the interactive viewer in a way which does not block, allowing user code to continue execution. In this mode, the user's script is responsible for timing and advancing the physics state, and mouse-drag perturbations will not work unless the user explicitly synchronizes incoming events.
-- lock(): provides a mutext lock for the viewer as a context manager. Since the viewer operates its own thread, user code must ensure that it is holding the viewer lock before modifying any physics or visualization state. 
-- sync(): synchronizes between the user's mjModel, mjData and the GUI. 
-- key_callback: A callable which gets called each time a keyboard event occurs in the viewer window.
 
 # Core functions
 
-- mjData: contains the state and quantities that depend on it. The state is made up of time, generalized positions and generalized velocities. These are respectively data.time, data.qpos and data.qvel. In order to make a new mjData, all we need is our mjModel using `mujoco.MjData(model)`
+- mjData: contains the state and quantities that depend on it. The state is made up of time, generalized positions and generalized velocities. These are respectively **data.time**, **data.qpos** and **data.qvel**. In order to make a new mjData, all we need is our mjModel using `mujoco.MjData(model)`
     - contains functions of the state, for example the Cartesian positions of objects in the world frame. The (x, y, z) positions of our two geoms are `in data.geom_xpos`:
         - **To update the values in here, the data should be explicitly propagated.**
 
@@ -40,15 +39,39 @@ MuJoCo 엔진이 시뮬레이션의 시간 흐름, 물리 법칙 계산, 화면 
 
 # Concept
 
-- body: the things that move (and which have inertia) are called bodies.
-- free body: is a body with a free joint having 6 DoFs, i.e., 3 translations and 3 rotations.
 - MJCF: MuJoCo XML Format
+- worldbody: The top-level body
+- body: the things that move (and which have inertia) are called bodies.
+  - **joint**, **geom**, **site**, **camera**, **light** is fixed to the local frame of the body and always moves with it.
+  - free body: is a body with a free joint having 6 DoFs, i.e., 3 translations and 3 rotations.
 - 6 DoFs: is the number of independent movement which an object can have in space.
   - 3 translations: x, y, z
   - 3 rotations: roll, pitch, yaw
 - Spatial frame: contains location(x,y,z) and orientation, 6-DOF
   - right-handed rule
 - geometric object: 겉모양과 충돌을 담당하는 요소
+- MuJoco's frame types
+  - Bodies: each body has two frames
+      - Regular Frame: a frame used to define it as well as to position other elements relative to it
+      - Inertial Frame: centered at the body's center of mass and aligned with its pricinpal axes of inertia.
+  - Geoms: collision and visual geometry attached to bodies. Each geoms has its own frame, which may be offset from the parent body.
+  - Sites:**Massless frames attached to bodies**. **Sites mark points of interest** such as end-effectors, sensor locations, and grasp points, without adding collision geometry. IK tasks are typically defined on sites.
+    - Sites do not participant in collision detection or automated computation of inertial properties
+- joint
+  - joint in body, create motion degrees of freedom between parent and child body. Without joint, that child body is welded to its parent
+  - types
+    - hinge: rotation about one axis (1 DOF)
+    - slide: translation along one axis (1 DOF)
+    - ball: spherical joint (3 DOF, but 4 values in qpos due to quaternion overparameterization)
+    - free: unconstrained 6-DOF motion (6 DOF but 7 values in qpos: 3 translation + 4 quaternion)
+      - mujoco uses scalar-first quaternions (wxyz). where w is the real component
+
+# Coordinate System
+
+mujoco uses a right-handed coordinate system. By default:
+- Z is up (gravity points in -Z)
+- X is forward
+- Y is lef
 
 # Model
 
@@ -101,14 +124,21 @@ with mujoco.Renderer(model) as renderer:
 
 # MJCF
 
-## Kinematic tree
+## Transform
 
-- worldbody: The top-level body
-- body: physical entity
-  - **joint**, **geom**, **site**, **camera**, **light** is fixed to the local frame of the body and always moves with it.
-- joint
-  - joint in body, create motion degrees of freedom between parent and child body.
-  - body without joint, that child body is welded to its parent
+The relationship between parent frame and child frame is represented as the attribute within a frame tag
+- pos: represent child frame's position relative to parent frame origin
+- quat: represent child frame's orientation relative to parent frame axes
+
+```xml
+<body name="link0" childclass="panda">
+  <body name="link1" pos="0 0 0.333">
+    <body name="link2" quat="1 -1 0 0"/> 
+  </body>
+</body>
+```
+
+## Kinematic tree
 
 ## Default settings
 
@@ -139,3 +169,7 @@ MyoConverter is a tool for converting OpenSim musculoskeletal (MSK) models to th
 mocap bodies are static children of the world (i.e., have no joints) and their mocap attribute is set to “true”. They can be used to input a data stream from a motion capture device into a MuJoCo simulation.
 
 The first step is to define a mocap body in the MJCF model, and implement code that reads the data stream at runtime and sets mjData.mocap_pos and mjData.mocap_quat to the position and orientation received from the motion capture system. The simulate.cc code sample uses the mouse as a motion capture device, allowing the user to move mocap bodies around:
+
+# Jacobian
+
+mujoco's mj_jacBody, mj_jacSite, and mj_jacGeom return Jacobians in the local-world-aligned frame: the origin is at the frame, but axes are aligned with the world. In Pinocchio terminology, this is LOCAL_WORLD_ALIGNED
