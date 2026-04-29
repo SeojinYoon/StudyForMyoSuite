@@ -5,17 +5,17 @@ import mediapy as media
 from mink import Configuration, SE3, SO3, FrameTask, solve_ik
 
 def do_IK(configuration, 
-                  tasks,
-                  renderer, 
-                  n_frames,
-                  dt,
-                  target_info,
-                  is_render = True,
-                  solver_name = "quadprog",
-                  limits = [],
-                  rendering_fps = 60,
-                  is_clear_pos = True,
-                  static_pos_name = "home"):
+          tasks,
+          renderer, 
+          n_frames,
+          dt,
+          target_info,
+          is_render = True,
+          solver_name = "quadprog",
+          limits = [],
+          rendering_fps = 60,
+          is_clear_pos = True,
+          static_pos_name = "home"):
     if is_clear_pos:
         configuration.update_from_keyframe(static_pos_name)
 

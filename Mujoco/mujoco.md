@@ -173,3 +173,17 @@ The first step is to define a mocap body in the MJCF model, and implement code t
 # Jacobian
 
 mujoco's mj_jacBody, mj_jacSite, and mj_jacGeom return Jacobians in the local-world-aligned frame: the origin is at the frame, but axes are aligned with the world. In Pinocchio terminology, this is LOCAL_WORLD_ALIGNED
+
+# Modeling
+
+## Relation to OpenSim
+
+https://mujoco.readthedocs.io/en/stable/modeling.html
+
+Mujoco assume inelastic tendons while OpenSim can model tendon elasticity. 
+
+Pennation angle is not modeled in MuJoCo
+
+Tendon wrapping is also more limited in MuJoCo. We allow spheres and infinite cylinders as wrapping objects, and require two wrapping objects to be separated by a fixed site in the tendon path. We also allow “side sites” to be placed inside the sphere or cylinder, which causes an inverse wrap: the tendon path is constrained to pass through the object instead of going around it.
+
+**Note on side site**: 근육이 뼈나 관절 주위를 지날 때, 특정 위치를 반드시 거쳐 가도록 경로를 고정하는 역할을 수행함. MuJoCo의 규칙에 따라 두 개의 wrapping objects 사이를 지날 때, 경로가 꼬이지 않도록 중간에서 중심을 잡아주는 고정점 역할을 수행함.
