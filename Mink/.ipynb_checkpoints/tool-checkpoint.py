@@ -22,16 +22,18 @@ def do_IK(configuration,
 
     frames = []
     for frame_i in range(n_frames):
-        for task in tasks:
-            if type(task) is FrameTask:
-                # Set target
-                for target in target_info:
+        frame_tasks = [task for task in tasks if type(task) is FrameTask]
+        for task in frame_tasks:
+            for target in target_info:
+                if task.frame_name == target:
                     target_val = target_info[target][frame_i] # [w_o, x_o, y_o, z_o ,x,y,z]
                     new_target = SE3(wxyz_xyz = target_val)
 
                     task.set_target(new_target)
-                    configuration.data.mocap_pos[0] = new_target.wxyz_xyz[4:]
-                    configuration.data.mocap_quat[0] = new_target.wxyz_xyz[:4]
+
+                    if task.mocap_id is not None:
+                        configuration.data.mocap_pos[task.mocap_id] = new_target.wxyz_xyz[4:]
+                        configuration.data.mocap_quat[task.mocap_id] = new_target.wxyz_xyz[:4]
         
         # Perform inverse kinematics
         vel = solve_ik(configuration, tasks, dt, solver=solver_name, limits = limits)
