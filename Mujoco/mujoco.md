@@ -215,3 +215,13 @@ Sites are light geoms. They have the same appearance properties but cannot parti
 ### Joint
 
 Joint connects parent and child body.
+
+# Simulation
+
+- mj_kinematics
+    * Computes only the forward kinematics based on current joint positions (qpos), updating the Cartesian position and orientation of bodies, geoms, and sites.
+- mj_forward
+    * Evaluates forward kinematics as well as all forward dynamics (e.g., forces, accelerations, sensor data) from qpos, qvel, and ctrl without advancing time.
+- mj_step
+    * Advances the simulation by one time step ($dt$). It executes the kinematics/dynamics pipeline and performs numerical time integration to update the state (qpos, qvel).
+
